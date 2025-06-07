@@ -5,10 +5,30 @@ use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
 use tracing::{debug, error, info, warn};
 
-#[derive(Debug, Serialize, Deserialize, Clone)]
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
+pub struct LoggingConfig {
+    #[serde(default = "default_log_level")]
+    pub level: String,
+}
+
+fn default_log_level() -> String {
+    "INFO".to_string()
+}
+
+impl Default for LoggingConfig {
+    fn default() -> Self {
+        Self {
+            level: default_log_level(),
+        }
+    }
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq)] // Added PartialEq
 pub struct Config {
     pub rpc: RpcConfig,
     pub miner: MinerConfig,
+    #[serde(default)] // Ensure LoggingConfig defaults if missing from file
+    pub logging: LoggingConfig,
 }
 
 impl Default for Config {
@@ -16,6 +36,7 @@ impl Default for Config {
         Config {
             rpc: RpcConfig::default(),
             miner: MinerConfig::default(),
+            logging: LoggingConfig::default(),
         }
     }
 }
@@ -34,10 +55,28 @@ impl Config {
         };
 
         match config_result {
-            Ok(cfg) => {
-                // Это сообщение дублируется с main.rs, но может быть полезно для отладки самого модуля config
-                // info!("Конфигурация успешно загружена (из config::load).");
-                debug!("Загруженная конфигурация (из config::load): {:?}", cfg);
+            Ok(cfg) => { // cfg is implicitly cloned later for saving, so not mut needed here.
+                debug!("Конфигурация успешно загружена (из config::load): {:?}", cfg);
+
+                let path_to_save_result = if let Some(p_str) = path_override {
+                    Ok(PathBuf::from(p_str))
+                } else {
+                    confy::get_configuration_file_path(app_name, Some(config_file_name))
+                };
+
+                match path_to_save_result {
+                    Ok(path_to_save) => {
+                        // Save the configuration. If serde filled in any defaults, they will be included.
+                        if let Err(e) = confy::store_path(&path_to_save, cfg.clone()) { // Clone cfg for storing
+                            error!("Не удалось сохранить конфигурацию в '{:?}': {}. Файл на диске может быть неактуален.", path_to_save, e);
+                        } else {
+                            info!("Конфигурация была загружена и повторно сохранена в '{:?}', чтобы обеспечить актуальность всех полей.", path_to_save);
+                        }
+                    }
+                    Err(e) => {
+                        error!("Не удалось определить путь для сохранения конфигурационного файла после загрузки: {}. Конфигурация не будет автоматически обновлена на диске.", e);
+                    }
+                }
                 Ok(cfg)
             }
             Err(load_err) => {
@@ -75,12 +114,12 @@ impl Config {
     }
 }
 
-#[derive(Debug, Serialize, Deserialize, Clone)]
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq)] // Added PartialEq
 pub struct RpcConfig {
     pub url: String,
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "Option::is_none")] // Added skip_serializing_if
     pub username: Option<String>,
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "Option::is_none")] // Added skip_serializing_if
     pub password: Option<String>,
     pub wallet_address: String,
     #[serde(default = "default_rpc_check_interval")]
@@ -101,7 +140,7 @@ impl Default for RpcConfig {
     }
 }
 
-#[derive(Debug, Serialize, Deserialize, Clone)]
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq)] // Added PartialEq
 pub struct MinerConfig {
     #[serde(default = "default_miner_threads")]
     pub threads: usize,

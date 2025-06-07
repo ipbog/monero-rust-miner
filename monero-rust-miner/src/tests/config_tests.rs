@@ -80,6 +80,90 @@ fn test_config_load_creates_default_and_example_when_files_are_missing() {
     assert_eq!(loaded_config_after_creation.rpc.url, default_config_expected.rpc.url);
     assert_eq!(loaded_config_after_creation.miner.threads, default_config_expected.miner.threads);
     assert_eq!(loaded_config_after_creation.rpc.wallet_address, default_config_expected.rpc.wallet_address);
+    assert_eq!(loaded_config_after_creation.logging.level, default_config_expected.logging.level);
+
 
     clean_test_config_files(app_name_used_by_load, Some(config_file_name_used_by_load));
+}
+
+
+#[test]
+fn test_load_partial_config_and_merge_defaults() {
+    use std::io::Write;
+    use tempfile::NamedTempFile;
+
+    let partial_content = r#"
+[rpc]
+url = "http://custom.url:12345"
+wallet_address = "my_custom_wallet_address_for_test"
+# check_interval_secs is missing, should default
+# username and password missing, should default to None
+
+[miner]
+# threads is missing, should default
+enable_huge_pages_check = false
+# logging section is entirely missing, should default
+"#;
+
+    let mut tmp_file = NamedTempFile::new().expect("Failed to create temp file");
+    write!(tmp_file, "{}", partial_content).expect("Failed to write to temp file");
+
+    let loaded_config = Config::load(Some(tmp_file.path().to_str().unwrap()))
+        .expect("Failed to load config from temp file");
+
+    let default_config = Config::default();
+
+    // Assertions for loaded_config struct content
+    assert_eq!(loaded_config.rpc.url, "http://custom.url:12345");
+    assert_eq!(loaded_config.rpc.wallet_address, "my_custom_wallet_address_for_test");
+    assert_eq!(loaded_config.rpc.check_interval_secs, default_config.rpc.check_interval_secs); // Was missing
+    assert_eq!(loaded_config.rpc.username, None); // Was missing
+    assert_eq!(loaded_config.rpc.password, None); // Was missing
+
+    assert_eq!(loaded_config.miner.threads, default_config.miner.threads); // Was missing
+    assert_eq!(loaded_config.miner.enable_huge_pages_check, false);
+
+    assert_eq!(loaded_config.logging.level, default_config.logging.level); // Section was missing
+
+    // Assert that the file on disk was updated
+    let updated_content_str = fs::read_to_string(tmp_file.path()).expect("Failed to read back temp file");
+    let updated_toml_value: toml::Value = updated_content_str.parse().expect("Failed to parse updated TOML");
+
+    assert_eq!(updated_toml_value["rpc"]["url"].as_str(), Some("http://custom.url:12345"));
+    assert_eq!(updated_toml_value["rpc"]["wallet_address"].as_str(), Some("my_custom_wallet_address_for_test"));
+    assert_eq!(updated_toml_value["rpc"]["check_interval_secs"].as_integer(), Some(default_config.rpc.check_interval_secs as i64));
+    // username and password with skip_serializing_if = "Option::is_none" won't be in the file if None
+    assert!(updated_toml_value.get("rpc").and_then(|rpc| rpc.get("username")).is_none());
+    assert!(updated_toml_value.get("rpc").and_then(|rpc| rpc.get("password")).is_none());
+
+
+    assert_eq!(updated_toml_value["miner"]["threads"].as_integer(), Some(default_config.miner.threads as i64));
+    assert_eq!(updated_toml_value["miner"]["enable_huge_pages_check"].as_bool(), Some(false));
+
+    assert_eq!(updated_toml_value["logging"]["level"].as_str(), Some(default_config.logging.level.as_str()));
+
+    // TempFile is automatically deleted on drop
+}
+
+#[test]
+fn test_generate_default_config_file() {
+    use tempfile::NamedTempFile;
+
+    let default_config_to_save = Config::default();
+
+    // Create a temp file to get a path. confy::store_path will overwrite it.
+    let tmp_file = NamedTempFile::new().expect("Failed to create temp file for storing default config");
+    let tmp_path = tmp_file.path().to_path_buf(); // PathBuf needed for confy
+
+    // This mimics the core logic of --generate-config
+    confy::store_path(&tmp_path, default_config_to_save.clone()).expect("Failed to store default config");
+
+    assert!(tmp_path.exists(), "Generated config file should exist at {:?}", tmp_path);
+
+    let loaded_config_from_generated_file = Config::load(Some(tmp_path.to_str().unwrap()))
+        .expect("Failed to load the generated default config file");
+
+    assert_eq!(loaded_config_from_generated_file, default_config_to_save, "Loaded config from generated file should match Config::default()");
+
+    // tmp_file (NamedTempFile) handles deletion on drop
 }

@@ -13,21 +13,66 @@ mod logging;
 use monero_mining_engine::{MinerConfig, MiningEngine, MiningResult};
 use monero_rpc_connector::{MiningJob, MoneroRpc, RpcConnector, RpcConfig as ConnectorRpcConfig};
 
+use std::path::PathBuf; // Added for PathBuf
+
+const GENERATE_CONFIG_SENTINEL_DEFAULT_PATH: &str = "___USE_DEFAULT_PATH___";
+
 #[derive(Parser, Debug)]
 #[clap(author, version, about, long_about = None)]
 struct Args {
     #[clap(short, long, value_name = "FILE_PATH")]
     config: Option<String>,
+
+    #[clap(long, value_name = "OUTPUT_PATH", num_args = 0..=1, const_value = GENERATE_CONFIG_SENTINEL_DEFAULT_PATH)]
+    generate_config: Option<String>,
 }
 
 #[tokio::main]
 async fn main() -> Result<()> {
-    logging::init_logging();
+    // Initialize logging with no config first for early messages (like --generate-config)
+    // The logging level will be re-initialized if the application proceeds to load config.
+    logging::init_logging(None);
     info!("Запуск Monero Rust CPU Miner v{}...", env!("CARGO_PKG_VERSION"));
 
     let args = Args::parse();
+
+    if let Some(gc_path_arg) = args.generate_config {
+        // Logging for config generation will use the initial default level or RUST_LOG.
+        let default_cfg = config::Config::default();
+        let target_path: PathBuf = if gc_path_arg == GENERATE_CONFIG_SENTINEL_DEFAULT_PATH {
+            // User used --generate-config without a value, try standard path then fallback
+            confy::get_configuration_file_path("monero_miner", Some("Config"))
+                .unwrap_or_else(|e| {
+                    warn!("Не удалось получить стандартный путь для конфигурации ({}). Файл будет создан как 'Config.toml' в текущей директории.", e);
+                    PathBuf::from("Config.toml")
+                })
+        } else {
+            // User provided a path: --generate-config /path/to/config.toml
+            PathBuf::from(gc_path_arg)
+        };
+
+        match confy::store_path(&target_path, default_cfg) {
+            Ok(_) => {
+                info!("Файл конфигурации успешно сгенерирован: {:?}", target_path);
+            }
+            Err(e) => {
+                error!("Не удалось сохранить сгенерированный файл конфигурации в '{:?}': {}", target_path, e);
+                return Err(anyhow!("Ошибка генерации файла конфигурации: {}", e));
+            }
+        }
+        return Ok(()); // Exit after generating config
+    }
+
+    // Proceed with normal operation if --generate-config was not used
     let app_config = config::Config::load(args.config.as_deref())
         .map_err(|e| anyhow!("Критическая ошибка загрузки конфигурации: {}. Убедитесь, что файл конфигурации существует и корректен, или удалите его для создания дефолтного.", e))?;
+
+    // Re-initialize logging here with the level from the loaded configuration
+    // This will apply the user's desired log level for the rest of the application.
+    // The previous logging::init_logging(None) call ensured that RUST_LOG was respected
+    // if set, and this call will respect RUST_LOG over the config file as per logging.rs logic.
+    logging::init_logging(Some(app_config.logging.level.as_str()));
+
     info!("Конфигурация успешно загружена из '{}'.", args.config.as_deref().unwrap_or("стандартного расположения"));
     debug!("Загруженная конфигурация: {:?}", app_config);
 

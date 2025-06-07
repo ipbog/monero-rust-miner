@@ -13,3 +13,10 @@ check_interval_secs = 5
 [miner]
 threads = 0 # 0 для автоопределения (все физические ядра)
 enable_huge_pages_check = true # (Только Linux)
+
+[logging]
+# Уровень детализации логов.
+# Возможные значения: TRACE, DEBUG, INFO, WARN, ERROR
+# По умолчанию используется "INFO", если не указано или указано неверно.
+# Может быть переопределен переменной окружения RUST_LOG.
+level = "INFO"
