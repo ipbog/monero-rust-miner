@@ -1,0 +1,1 @@
+# monero-rust-miner
