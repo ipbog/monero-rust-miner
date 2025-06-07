@@ -1,70 +1,43 @@
 # monero-rust-miner/Cargo.toml
-# Главный Cargo.toml для рабочего пространства (workspace) и корневого крейта.
-
 [workspace]
 members = [
-    ".", // Текущий пакет (корневой крейт monero-rust-miner)
+    ".",
     "modules/rpc_connector",
     "modules/mining_engine",
 ]
-resolver = "2" # Рекомендуется для новых проектов Rust.
+resolver = "2"
 
 [package]
 name = "monero-rust-miner"
-version = "1.0.0" # Версия вашего проекта
+version = "1.0.0"
 edition = "2021"
-authors = ["Your Name <your.email@example.com>"] # ЗАМЕНИТЕ НА ВАШИ ДАННЫЕ
+authors = ["Your Name <your.email@example.com>"] # ЗАМЕНИТЬ
 description = "High-performance Monero CPU miner implemented in Rust for solo mining with local node integration."
-license = "MIT" # Или ваша лицензия
-repository = "https://github.com/yourusername/monero-rust-miner" # ЗАМЕНИТЕ НА ВАШ РЕПОЗИТОРИЙ
-readme = "README.md" # Файл README будет добавлен в финале проекта
+license = "MIT"
+repository = "https://github.com/yourusername/monero-rust-miner" # ЗАМЕНИТЬ
+readme = "README.md"
 keywords = ["monero", "miner", "cpu", "randomx", "cryptocurrency", "solo-mining"]
 categories = ["command-line-utilities", "cryptography::cryptocurrencies"]
-publish = false # Установите true, если планируете публиковать на crates.io
+publish = false
 
-# --- Зависимости для корневого крейта (в основном для src/main.rs, src/config.rs, src/logging.rs) ---
 [dependencies]
-# Асинхронный рантайм и утилиты Tokio
 tokio = { version = "1.45.1", features = ["macros", "rt-multi-thread", "sync", "time", "signal"] }
-
-# Удобное управление ошибками
 anyhow = "1.0.98"
-
-# Логирование
 tracing = "0.1.41"
 tracing-subscriber = { version = "0.3.19", features = ["env-filter", "fmt"] }
-
-# Работа с конфигурационными файлами
 confy = "0.6.1"
-
-# Определение количества CPU
 num_cpus = "1.17.0"
-
-# Работа с HEX-строками
 hex = "0.4.3"
-
-# Парсинг аргументов командной строки
 clap = { version = "4.5.9", features = ["derive"] }
 
-# --- Зависимости от локальных под-крейтов ---
-# Эти крейты будут содержать основную логику.
 monero-rpc-connector = { path = "modules/rpc_connector" }
 monero-mining-engine = { path = "modules/mining_engine" }
 
-
-# --- Зависимости только для разработки и тестирования кода в src/tests/* этого корневого крейта ---
 [dev-dependencies]
-lazy_static = "1.5.0" # Используется в src/tests/logging_tests.rs
+lazy_static = "1.5.0"
+wiremock = { version = "0.6.0", optional = true }
 
-# --- Фичи ---
 [features]
 default = []
-
-# Фича для включения тестов rpc_connector, требующих wiremock.
-# Активируется при запуске тестов: cargo test --features rpc_tests_enabled (или другое имя)
-# И пробрасывается в rpc_connector, если он ее определяет.
-# rpc_tests_enabled = ["monero-rpc-connector/wiremock_tests"] # Пример, если фича в rpc_connector называется wiremock_tests
-
-# Фича для переносимой сборки RandomX (без -march=native).
-# Эта фича пробрасывается в крейт monero-mining-engine.
+rpc_tests = ["dep:wiremock"]
 portable_build = ["monero-mining-engine/portable_build"]

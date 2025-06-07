@@ -1,0 +1,15 @@
+# monero-rust-miner/Config.toml.example
+# Пример конфигурационного файла.
+# Будет создан автоматически при первом запуске, если Config.toml отсутствует.
+# Обязательно отредактируйте этот файл, указав ваш адрес кошелька Monero!
+
+[rpc]
+url = "http://127.0.0.1:18081"
+# username = ""
+# password = ""
+wallet_address = "493QGJspJ41Km2aJxvqD2SR1oUfvH1yKV2rvX6aR85AuDKAYoKGgF4D27gyQoprWC2Fxg5QKQ1Rn4aLk5cZLhbuJ781mkZU" # !!! ЗАМЕНИТЕ НА СВОЙ АДРЕС !!!
+check_interval_secs = 5
+
+[miner]
+threads = 0 # 0 для автоопределения (все физические ядра)
+enable_huge_pages_check = true # (Только Linux)

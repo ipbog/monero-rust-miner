@@ -6,13 +6,10 @@ use std::sync::Arc;
 use tokio::sync::{broadcast, mpsc, watch};
 use tracing::{debug, error, info, warn};
 
-// Локальные модули из этой же директории src/
 mod config;
 mod logging;
-// Логика huge_pages теперь полностью инкапсулирована в monero_mining_engine,
-// main.rs не вызывает ее напрямую.
+// Логика huge_pages теперь полностью внутри monero_mining_engine
 
-// Типы и трейты из наших под-крейтов (их полная реализация будет в Частях 2 и 3)
 use monero_mining_engine::{MinerConfig, MiningEngine, MiningResult};
 use monero_rpc_connector::{MiningJob, MoneroRpc, RpcConnector, RpcConfig as ConnectorRpcConfig};
 
@@ -36,13 +33,11 @@ async fn main() -> Result<()> {
 
     if let Err(e) = config::validate_wallet_address(&app_config.rpc.wallet_address) {
         error!("Ошибка в конфигурации: Неверный адрес кошелька: {}", e);
-        error!("Пожалуйста, укажите корректный Monero-адрес в поле 'wallet_address' файла конфигурации.");
         return Err(anyhow!("Неверный адрес кошелька: {}", e));
     }
     info!("Адрес кошелька для майнинга: {}", app_config.rpc.wallet_address);
 
     let corrected_threads = config::validate_and_correct_threads(app_config.miner.threads);
-    // enable_huge_pages_check из app_config.miner будет передана в MiningEngine::new
 
     let rpc_connector_config = ConnectorRpcConfig {
         url: app_config.rpc.url.clone(),
@@ -51,7 +46,8 @@ async fn main() -> Result<()> {
         wallet_address: app_config.rpc.wallet_address.clone(),
         check_interval_secs: app_config.rpc.check_interval_secs,
     };
-    let rpc_connector_arc = Arc::new(RpcConnector::new(rpc_connector_config).await?);
+    // RpcConnector::new is now synchronous as per Part 2
+    let rpc_connector_arc = Arc::new(RpcConnector::new(rpc_connector_config)?);
     info!("RpcConnector инициализирован для URL: {}", app_config.rpc.url);
 
     info!("Запрос начального шаблона блока для seed_hash...");
@@ -66,7 +62,6 @@ async fn main() -> Result<()> {
     if initial_seed_hash_bytes.len() != 32 {
         return Err(anyhow!("Декодированный initial_seed_hash имеет некорректную длину: {} байт, ожидалось 32.", initial_seed_hash_bytes.len()));
     }
-    debug!("Используется initial_seed_hash (первые 8 байт HEX): {}", &initial_job_for_seed.seed_hash[0..16.min(initial_job_for_seed.seed_hash.len())]);
 
     let miner_engine_config = MinerConfig {
         threads: corrected_threads,
@@ -84,16 +79,18 @@ async fn main() -> Result<()> {
         let rpc_connector = Arc::clone(&rpc_connector_arc);
         let job_tx = job_tx_to_engine.clone();
         let cancellation_tx = cancellation_broadcaster_tx.clone();
-        let mut shutdown_rx = shutdown_broadcast_tx.subscribe();
+        let mut shutdown_rx = shutdown_broadcast_tx.subscribe(); // RpcConnector expects a broadcast::Receiver
         async move {
+            // RpcConnector is Arc'd, so its methods are called on Arc<Self>
             rpc_connector.start_job_fetch_loop(job_tx, cancellation_tx, shutdown_rx).await
         }
     });
 
     let mining_task = tokio::spawn({
         let mining_engine = Arc::clone(&mining_engine_arc);
-        let mut shutdown_rx = shutdown_broadcast_tx.subscribe();
+        let mut shutdown_rx = shutdown_broadcast_tx.subscribe(); // MiningEngine expects a broadcast::Receiver
         async move {
+            // MiningEngine is Arc'd, so its methods are called on Arc<Self>
             mining_engine.mine(
                 job_rx_from_rpc,
                 solved_job_tx_from_engine,
@@ -191,7 +188,7 @@ async fn main() -> Result<()> {
     }
 
     info!("Ожидание штатного завершения фоновых задач...");
-    let _ = shutdown_broadcast_tx.send(());
+    let _ = shutdown_broadcast_tx.send(()); // Ensure shutdown signal is sent
 
     let (rpc_res, mining_res) = tokio::join!(rpc_task, mining_task);
 
