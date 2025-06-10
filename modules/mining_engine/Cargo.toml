@@ -2,5 +2,15 @@
 name = "monero-mining-engine"
 version = "0.1.0"
 edition = "2021"
+build = "build.rs"
 
 [dependencies]
+anyhow = "1.0"
+tokio = { version = "1", features = ["sync", "macros"] }
+tracing = "0.1"
+thiserror = "1.0"
+hex = "0.4"
+monero-rpc-connector = { path = "../rpc_connector" }
+
+[build-dependencies]
+cc = "1.0"

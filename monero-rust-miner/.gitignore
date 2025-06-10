@@ -1,0 +1,16 @@
+# Ignore Cargo build artifacts
+/target/
+
+# Ignore other common files
+*.log
+*.lock
+
+# VSCode
+.vscode/
+
+# IntelliJ
+.idea/
+
+# OS-specific
+.DS_Store
+Thumbs.db

@@ -13,4 +13,4 @@ tokio = { version = "1", features = ["rt-multi-thread", "macros"] }
 tracing = "0.1"
 thiserror = "1.0"
 url = "2.5.0"
-monero = { version = "0.18.0", features = ["serde", "utils"] }
+monero = { version = "0.18.0", features = ["serde"] }

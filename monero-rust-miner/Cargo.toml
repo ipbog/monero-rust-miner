@@ -11,10 +11,10 @@ resolver = "2"
 name = "monero-rust-miner"
 version = "1.0.0"
 edition = "2021"
-authors = ["Your Name <your.email@example.com>"] # ЗАМЕНИТЬ
+authors = ["monero-rust-miner contributors"]
 description = "High-performance Monero CPU miner implemented in Rust for solo mining with local node integration."
 license = "MIT"
-repository = "https://github.com/yourusername/monero-rust-miner" # ЗАМЕНИТЬ
+repository = "https://github.com/project-maintainer/monero-rust-miner"
 readme = "README.md"
 keywords = ["monero", "miner", "cpu", "randomx", "cryptocurrency", "solo-mining"]
 categories = ["command-line-utilities", "cryptography::cryptocurrencies"]
@@ -32,10 +32,10 @@ clap = { version = "4.5.9", features = ["derive"] }
 
 monero-rpc-connector = { path = "modules/rpc_connector" }
 monero-mining-engine = { path = "modules/mining_engine" }
+wiremock = { version = "0.6.0", optional = true }
 
 [dev-dependencies]
 lazy_static = "1.5.0"
-wiremock = { version = "0.6.0", optional = true }
 
 [features]
 default = []
